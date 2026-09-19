@@ -1,5 +1,7 @@
 import json
+import importlib.util
 import unittest
+from pathlib import Path
 
 from gui_memory_specialization.canonical import RecentEventSelector, compile_memory
 from gui_memory_specialization.baselines import NoHistorySelector, StructuredHeuristicSelector
@@ -69,6 +71,20 @@ class CanonicalInterfaceTests(unittest.TestCase):
         group = episode_group("mobile-chrome-030eeff7-b492-4218-b312-701ec99ee0cc-step-4")
         self.assertEqual(group, "030eeff7-b492-4218-b312-701ec99ee0cc")
         self.assertEqual(is_test_group(group), is_test_group(group))
+
+    def test_osworld_preflight_reports_required_keys(self):
+        path = Path(__file__).parents[1] / "examples" / "check_osworld_host.py"
+        spec = importlib.util.spec_from_file_location("osworld_preflight", path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        result = module.inspect_host()
+        self.assertEqual(
+            set(result),
+            {"cpu_virtualization_flags", "kvm_device", "docker_cli", "docker_daemon", "docker_provider_ready"},
+        )
+        self.assertIsInstance(result["docker_provider_ready"], bool)
 
 
 if __name__ == "__main__":

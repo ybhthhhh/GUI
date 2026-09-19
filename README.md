@@ -76,6 +76,20 @@ the GUI experiment's results table.
 Qwen2.5-VL adapter. It is not a benchmark trajectory and is excluded from every
 scientific result or ablation table.
 
+### OSWorld-Verified rollout-host preflight
+
+Before installing VM images or starting an online confirmation, run:
+
+```bash
+python3 examples/check_osworld_host.py --json
+```
+
+For the OSWorld Docker provider, `kvm_device`, `docker_cli`, and
+`docker_daemon` must all be `true`. This preflight makes no system change and
+never starts a VM. A nonzero exit code means the host is not ready for an
+execution-based rollout; do not treat offline likelihood results as task success
+until this check passes and a real benchmark smoke run succeeds.
+
 ### 31571 runtime note
 
 On node 31571, the default Transformers 4.51 installation imports an incompatible
