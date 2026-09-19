@@ -12,6 +12,8 @@ import argparse
 import os
 import shutil
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -47,25 +49,39 @@ def main() -> None:
     offset = partial.stat().st_size if partial.exists() else 0
     if offset > args.expected_bytes:
         raise ValueError(f"partial file is larger than expected: {offset} > {args.expected_bytes}")
-    response = open_url(build_url(args.path), args.proxy, offset)
-    status = getattr(response, "status", response.getcode())
-    if offset and status != 206:
-        # The endpoint ignored Range.  Start cleanly rather than appending a
-        # duplicate stream.
-        partial.unlink()
-        offset = 0
-        response.close()
-        response = open_url(build_url(args.path), args.proxy, offset)
-    written = offset
-    next_report = ((written // (1024**3)) + 1) * (1024**3)
-    mode = "ab" if offset else "wb"
-    with response, partial.open(mode) as destination:
-        while block := response.read(8 * 1024 * 1024):
-            destination.write(block)
-            written += len(block)
-            if written >= next_report:
-                print(f"downloaded_gib={written / 1024**3:.2f}", flush=True)
-                next_report += 1024**3
+    retries = 0
+    while True:
+        offset = partial.stat().st_size if partial.exists() else 0
+        if offset > args.expected_bytes:
+            raise ValueError(f"partial file is larger than expected: {offset} > {args.expected_bytes}")
+        try:
+            response = open_url(build_url(args.path), args.proxy, offset)
+            status = getattr(response, "status", response.getcode())
+            if offset and status != 206:
+                # The endpoint ignored Range.  Start cleanly rather than
+                # appending a duplicate stream.
+                partial.unlink()
+                response.close()
+                continue
+            next_report = ((offset // (1024**3)) + 1) * (1024**3)
+            mode = "ab" if offset else "wb"
+            with response, partial.open(mode) as destination:
+                while block := response.read(8 * 1024 * 1024):
+                    destination.write(block)
+                    offset += len(block)
+                    if offset >= next_report:
+                        print(f"downloaded_gib={offset / 1024**3:.2f}", flush=True)
+                        next_report += 1024**3
+            if offset == args.expected_bytes:
+                written = offset
+                break
+            raise RuntimeError(f"stream ended at {offset}, expected {args.expected_bytes}")
+        except (OSError, RuntimeError, urllib.error.URLError) as error:
+            retries += 1
+            if retries > 100:
+                raise RuntimeError("download exceeded 100 reconnect attempts") from error
+            print(f"download_retry={retries} offset={offset} error={error}", flush=True)
+            time.sleep(min(60, 2 ** min(retries, 5)))
     if written != args.expected_bytes:
         raise RuntimeError(f"incomplete download: got {written}, expected {args.expected_bytes}")
     os.replace(partial, args.output)

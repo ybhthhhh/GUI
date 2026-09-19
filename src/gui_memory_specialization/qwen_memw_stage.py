@@ -46,8 +46,9 @@ class QwenMemWStageOne:
         *,
         device: str = "cuda:0",
         memory_tokens: int = 8,
-        compressor_layers: int = 2,
+        compressor_layers: int = 8,
         compressor_heads: int = 16,
+        compressor_latent_size: int = 1024,
         learning_rate: float = 1e-4,
         kl_weight: float = 0.1,
     ):
@@ -76,6 +77,8 @@ class QwenMemWStageOne:
             memory_tokens=memory_tokens,
             layers=compressor_layers,
             heads=compressor_heads,
+            latent_size=compressor_latent_size,
+            share_weights=True,
         )
         self.compressor = self.compressor_spec.module().to(device)
         self.optimizer = torch.optim.AdamW(self.compressor.parameters(), lr=learning_rate)

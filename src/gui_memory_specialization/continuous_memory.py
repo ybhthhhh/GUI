@@ -35,15 +35,26 @@ class ContinuousMemoryCompressor:
     CUDA or Transformers merely to inspect experiment metadata.
     """
 
-    def __init__(self, hidden_size: int, memory_tokens: int = 8, layers: int = 2, heads: int = 8):
+    def __init__(
+        self,
+        hidden_size: int,
+        memory_tokens: int = 8,
+        layers: int = 8,
+        heads: int = 16,
+        latent_size: int | None = None,
+        share_weights: bool = True,
+    ):
         if hidden_size <= 0 or memory_tokens <= 0 or layers <= 0 or heads <= 0:
             raise ValueError("hidden_size, memory_tokens, layers, and heads must be positive")
-        if hidden_size % heads:
-            raise ValueError("hidden_size must be divisible by heads")
+        latent_size = hidden_size if latent_size is None else latent_size
+        if latent_size <= 0 or latent_size % heads:
+            raise ValueError("latent_size must be positive and divisible by heads")
         self.hidden_size = hidden_size
+        self.latent_size = latent_size
         self.memory_tokens = memory_tokens
         self.layers = layers
         self.heads = heads
+        self.share_weights = share_weights
         self._module = None
 
     def module(self):
@@ -56,31 +67,34 @@ class ContinuousMemoryCompressor:
         class _Compressor(nn.Module):
             def __init__(self, outer: ContinuousMemoryCompressor):
                 super().__init__()
-                self.latents = nn.Parameter(torch.empty(1, outer.memory_tokens, outer.hidden_size))
+                self.latents = nn.Parameter(torch.empty(1, outer.memory_tokens, outer.latent_size))
                 nn.init.trunc_normal_(self.latents, std=0.02)
-                self.blocks = nn.ModuleList(
-                    [
-                        nn.ModuleDict(
+                self.history_norm = nn.LayerNorm(outer.hidden_size)
+                self.input_projection = nn.Linear(outer.hidden_size, outer.latent_size, bias=False)
+                self.output_projection = nn.Linear(outer.latent_size, outer.hidden_size, bias=False)
+
+                def make_block():
+                    return nn.ModuleDict(
                             {
-                                "history_norm": nn.LayerNorm(outer.hidden_size),
-                                "latent_norm": nn.LayerNorm(outer.hidden_size),
-                                "cross": nn.MultiheadAttention(outer.hidden_size, outer.heads, batch_first=True),
-                                "ff_norm": nn.LayerNorm(outer.hidden_size),
+                                "latent_norm": nn.LayerNorm(outer.latent_size),
+                                "cross": nn.MultiheadAttention(outer.latent_size, outer.heads, batch_first=True),
+                                "ff_norm": nn.LayerNorm(outer.latent_size),
                                 "ff": nn.Sequential(
-                                    nn.Linear(outer.hidden_size, 4 * outer.hidden_size),
+                                    nn.Linear(outer.latent_size, 4 * outer.latent_size),
                                     nn.GELU(),
-                                    nn.Linear(4 * outer.hidden_size, outer.hidden_size),
+                                    nn.Linear(4 * outer.latent_size, outer.latent_size),
                                 ),
                             }
-                        )
-                        for _ in range(outer.layers)
-                    ]
-                )
+                    )
+
+                self.shared_block = make_block() if outer.share_weights else None
+                self.blocks = nn.ModuleList([] if outer.share_weights else [make_block() for _ in range(outer.layers)])
+                self.iterations = outer.layers
 
             def forward(self, history_states, history_mask=None):
                 if history_states.ndim != 3:
                     raise ValueError("history_states must have shape [batch, sequence, hidden]")
-                if history_states.shape[-1] != self.latents.shape[-1]:
+                if history_states.shape[-1] != self.input_projection.in_features:
                     raise ValueError("history hidden size does not match compressor")
                 if history_mask is not None and history_mask.shape != history_states.shape[:2]:
                     raise ValueError("history_mask must have shape [batch, sequence]")
@@ -92,13 +106,14 @@ class ContinuousMemoryCompressor:
                 history_states = history_states.to(self.latents.dtype)
                 latents = self.latents.expand(history_states.shape[0], -1, -1)
                 padding = ~history_mask.bool() if history_mask is not None else None
-                for block in self.blocks:
-                    keys = block["history_norm"](history_states)
+                keys = self.input_projection(self.history_norm(history_states))
+                blocks = [self.shared_block] * self.iterations if self.shared_block is not None else self.blocks
+                for block in blocks:
                     query = block["latent_norm"](latents)
                     update, _ = block["cross"](query, keys, keys, key_padding_mask=padding, need_weights=False)
                     latents = latents + update
                     latents = latents + block["ff"](block["ff_norm"](latents))
-                return latents.to(output_dtype)
+                return self.output_projection(latents).to(output_dtype)
 
         self._module = _Compressor(self)
         return self._module
