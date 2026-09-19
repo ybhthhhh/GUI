@@ -100,6 +100,47 @@ observation, text entry, and navigation.  The second must report
 backward pass, and LoRA optimizer update.  Neither output validates online task
 success: that requires a fixed task set and a programmatic success verifier.
 
+### Formal continuous-memory protocol
+
+The formal web experiment has two intentionally separated stages, following
+the relevant Mem-W/CoMEM design rather than treating logged outcomes as online
+rewards.
+
+1. **Stage one — offline continuous-memory distillation.** The Qwen2.5-VL
+   visual policy is frozen. A shared-weight, 1024-dimensional Q-Former
+   compresses up to three prior screenshot/action observations into eight
+   continuous tokens. The student sees those tokens plus the current webpage;
+   the teacher sees the uncompressed history. The trainable compressor minimizes
+   action cross-entropy plus KL divergence from the teacher at the same action
+   token positions.
+2. **Stage two — outcome-aware online update.** Only actual webpage rollouts
+   with `source="online_execution"` are accepted. Sibling rollouts of one task
+   form an RLOO group; their terminal rewards provide the policy-gradient
+   advantage. Offline trajectory files, including their `result.txt` values,
+   are rejected by this stage.
+
+The first-stage corpus is built only from CoMEM archive members in `success/`.
+It retains an episode-stable validation split and materializes only images used
+by selected training positions:
+
+```bash
+python3 examples/prepare_comem_stage1.py \
+  data/comem_raw/shopping.zip data/stage1/shopping_success.jsonl \
+  --image-root data/stage1/images --max-samples 15000
+
+CUDA_VISIBLE_DEVICES=0 python3 examples/train_memw_stage1.py \
+  data/stage1/shopping_success.jsonl outputs/stage1-shopping \
+  --model-path /home/work/Qwen2.5-VL-7B-Instruct \
+  --max-steps 15000 --checkpoint-every 100
+```
+
+`stage1_last.pt` contains the compressor, optimizer, and completed step. Resume
+without repeating completed updates using `--resume stage1_last.pt`. Before a
+long run, `examples/smoke_memw_stage1_qwen.py` and the one-step launcher smoke
+must pass on the exact node/runtime. The resulting stage-one checkpoint is a
+training artifact, not a claim of task success; stage two requires executable
+web tasks and terminal rewards from those executions.
+
 ### OSWorld-Verified rollout-host preflight
 
 Before installing VM images or starting an online confirmation, run:
