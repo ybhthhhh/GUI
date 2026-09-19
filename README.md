@@ -76,6 +76,30 @@ the GUI experiment's results table.
 Qwen2.5-VL adapter. It is not a benchmark trajectory and is excluded from every
 scientific result or ablation table.
 
+### Mem-W web-stage infrastructure checks
+
+The web-stage replacement for the blocked OSWorld rollout starts with a real
+browser interaction and a real vision-model update.  These commands are
+infrastructure checks only; they neither implement Mem-W's full training method
+nor produce a scientific score.
+
+```bash
+# In an environment with Playwright plus Chromium installed.
+python3 examples/check_memw_web_gui.py --proxy http://127.0.0.1:7897 \
+  --screenshot outputs/memw-web-smoke.png
+
+# On a GPU node with Qwen2.5-VL, Transformers, PEFT and its vendor PyTorch.
+CUDA_VISIBLE_DEVICES=0 python3 examples/qwen25vl_lora_train_smoke.py \
+  --model-path /home/work/Qwen2.5-VL-7B-Instruct \
+  --image examples/synthetic_upload.png
+```
+
+The first test must report `MEMW_WEB_GUI_INTERACTION_OK`, proving browser GUI
+observation, text entry, and navigation.  The second must report
+`QWEN25VL_LORA_TRAIN_SMOKE_OK`, proving a screenshot-conditioned forward pass,
+backward pass, and LoRA optimizer update.  Neither output validates online task
+success: that requires a fixed task set and a programmatic success verifier.
+
 ### OSWorld-Verified rollout-host preflight
 
 Before installing VM images or starting an online confirmation, run:
