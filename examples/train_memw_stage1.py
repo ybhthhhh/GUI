@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 from pathlib import Path
 
@@ -32,11 +33,28 @@ def load_records(path: Path, split: str) -> list[dict]:
 def checkpoint(path: Path, trainer: QwenMemWStageOne, step: int, config: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
+    compressor = getattr(trainer.compressor, "module", trainer.compressor)
     trainer.torch.save(
-        {"step": step, "config": config, "compressor": trainer.compressor.state_dict(), "optimizer": trainer.optimizer.state_dict()},
+        {"step": step, "config": config, "compressor": compressor.state_dict(), "optimizer": trainer.optimizer.state_dict()},
         temporary,
     )
     temporary.replace(path)
+
+
+def distributed_context(enabled: bool) -> tuple[int, int, int]:
+    """Initialise one-process-per-GPU synchronous training when requested."""
+    if not enabled:
+        return 0, 0, 1
+    import torch
+    import torch.distributed as dist
+
+    required = ("RANK", "LOCAL_RANK", "WORLD_SIZE")
+    if any(name not in os.environ for name in required):
+        raise ValueError("--distributed requires torchrun (RANK, LOCAL_RANK, WORLD_SIZE)")
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend="nccl")
+    return int(os.environ["RANK"]), local_rank, int(os.environ["WORLD_SIZE"])
 
 
 def main() -> None:
@@ -53,20 +71,26 @@ def main() -> None:
     parser.add_argument("--resume", type=Path, help="checkpoint written by an earlier run")
     parser.add_argument("--max-errors", type=int, default=25)
     parser.add_argument("--seed", type=int, default=20260919)
+    parser.add_argument("--distributed", action="store_true", help="run under torchrun with synchronous Q-Former gradients")
     args = parser.parse_args()
     if args.max_steps <= 0 or args.checkpoint_every <= 0:
         raise ValueError("max-steps and checkpoint-every must be positive")
+    rank, local_rank, world_size = distributed_context(args.distributed)
     records = load_records(args.manifest, "train")
     rng = random.Random(args.seed)
     rng.shuffle(records)
     trainer = QwenMemWStageOne(
         args.model_path,
-        device=args.device,
+        device=f"cuda:{local_rank}" if args.distributed else args.device,
         memory_tokens=args.memory_tokens,
         compressor_heads=16,
         learning_rate=args.learning_rate,
         kl_weight=args.kl_weight,
     )
+    if args.distributed:
+        trainer.compressor = trainer.torch.nn.parallel.DistributedDataParallel(
+            trainer.compressor, device_ids=[local_rank], output_device=local_rank
+        )
     args.output.mkdir(parents=True, exist_ok=True)
     metrics_path = args.output / "stage1_metrics.jsonl"
     checkpoint_path = args.output / "stage1_last.pt"
@@ -79,18 +103,20 @@ def main() -> None:
         "learning_rate": args.learning_rate,
         "frozen_backbone": True,
         "stage_two": "requires_online_execution_rewards",
+        "world_size": world_size,
     }
     start_step = 0
     if args.resume:
         state = trainer.torch.load(args.resume, map_location=trainer.device)
-        trainer.compressor.load_state_dict(state["compressor"])
+        getattr(trainer.compressor, "module", trainer.compressor).load_state_dict(state["compressor"])
         trainer.optimizer.load_state_dict(state["optimizer"])
         start_step = int(state["step"])
         print("MEMW_STAGE1_RESUMED", f"step={start_step}", f"checkpoint={args.resume}", flush=True)
     errors = 0
-    with metrics_path.open("a", encoding="utf-8") as metrics:
+    metrics = metrics_path.open("a", encoding="utf-8") if rank == 0 else None
+    try:
         for step in range(start_step + 1, args.max_steps + 1):
-            record = records[(step - 1) % len(records)]
+            record = records[((step - 1) * world_size + rank) % len(records)]
             history = [image_message(item["image"], f"Earlier webpage state. The action taken was: {item['action']}") for item in record["history"]]
             current = [image_message(record["current_image"], f"Task: {record['task']}\nChoose the next webpage action.")]
             try:
@@ -98,8 +124,9 @@ def main() -> None:
             except (OSError, RuntimeError, ValueError) as error:
                 errors += 1
                 payload = {"step": step, "sample_id": record["sample_id"], "error": str(error)}
-                metrics.write(json.dumps(payload) + "\n")
-                metrics.flush()
+                if metrics:
+                    metrics.write(json.dumps(payload) + "\n")
+                    metrics.flush()
                 print("MEMW_STAGE1_SAMPLE_ERROR", json.dumps(payload), flush=True)
                 if errors > args.max_errors:
                     raise RuntimeError(f"aborting after {errors} invalid samples") from error
@@ -113,12 +140,20 @@ def main() -> None:
                 "action_tokens": result.loss.action_tokens,
                 "memory_tokens": result.memory_tokens,
             }
-            metrics.write(json.dumps(payload) + "\n")
-            metrics.flush()
-            if step % args.checkpoint_every == 0 or step == args.max_steps:
+            if metrics:
+                metrics.write(json.dumps(payload) + "\n")
+                metrics.flush()
+            if rank == 0 and (step % args.checkpoint_every == 0 or step == args.max_steps):
                 checkpoint(checkpoint_path, trainer, step, config)
                 print("MEMW_STAGE1_CHECKPOINT", json.dumps(payload), flush=True)
-    print("MEMW_STAGE1_TRAIN_COMPLETE", f"steps={args.max_steps}", f"checkpoint={checkpoint_path}")
+    finally:
+        if metrics:
+            metrics.close()
+        if args.distributed:
+            trainer.torch.distributed.barrier()
+            trainer.torch.distributed.destroy_process_group()
+    if rank == 0:
+        print("MEMW_STAGE1_TRAIN_COMPLETE", f"steps={args.max_steps}", f"checkpoint={checkpoint_path}")
 
 
 if __name__ == "__main__":
