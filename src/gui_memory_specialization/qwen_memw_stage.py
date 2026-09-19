@@ -193,3 +193,40 @@ class QwenMemWStageOne:
         total.backward()
         self.optimizer.step()
         return StageOneStep(metrics, memory_tokens=memory.shape[1], trainable_parameters=self.trainable_parameters)
+
+    def evaluate_step(
+        self,
+        *,
+        history_messages: list[dict[str, Any]],
+        current_messages: list[dict[str, Any]],
+        action: str,
+    ) -> StageOneStep:
+        """Measure a frozen checkpoint on one held-out trajectory transition.
+
+        This mirrors the teacher/student alignment of :meth:`train_step`, but
+        deliberately has no optimizer interaction.  It is therefore safe to
+        run against the episode-level validation split after a formal stage-one
+        checkpoint has been written.
+        """
+        torch = self.torch
+        if not history_messages:
+            raise ValueError("stage one requires at least one history message")
+        history_inputs, _ = self._prompt_inputs(history_messages, action=None)
+        current_inputs, action_ids = self._prompt_inputs(current_messages, action)
+        assert action_ids is not None
+        teacher_inputs, teacher_actions = self._prompt_inputs(history_messages + current_messages, action)
+        assert teacher_actions is not None
+        self.compressor.eval()
+        with torch.no_grad():
+            history_output = self.model(**history_inputs, output_hidden_states=True, return_dict=True, use_cache=False)
+            history_states = history_output.hidden_states[-1]
+            teacher_logits = self.model(**teacher_inputs, return_dict=True, use_cache=False).logits
+            memory = self.compressor(history_states, history_inputs.get("attention_mask"))
+            student_logits = self._compressed_logits(memory, current_inputs)
+            token_count = action_ids.shape[1]
+            student_action_logits = student_logits[:, -token_count - 1 : -1, :]
+            teacher_action_logits = teacher_logits[:, -token_count - 1 : -1, :]
+            _, metrics = stage_one_distillation_loss(
+                student_action_logits, teacher_action_logits, action_ids, kl_weight=self.kl_weight
+            )
+        return StageOneStep(metrics, memory_tokens=memory.shape[1], trainable_parameters=self.trainable_parameters)

@@ -61,3 +61,10 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 "$PYTHON" -m torch.distributed.run --standalone --n
   "$WORK/outputs/stage1-formal" --model-path /home/work/Qwen2.5-VL-7B-Instruct \
   --max-steps 5000 --checkpoint-every 50 --distributed \
   >"$logs/stage1-formal.log" 2>&1
+
+# Evaluation is single-process and read-only: it reports the same CE/KL terms
+# on episodes excluded from all training updates.
+CUDA_VISIBLE_DEVICES=0 "$PYTHON" "$WORK/examples/evaluate_memw_stage1.py" \
+  "$stage/comem_shopping_service.jsonl" "$WORK/outputs/stage1-formal/stage1_last.pt" \
+  "$WORK/outputs/stage1-formal/held_out.json" --model-path /home/work/Qwen2.5-VL-7B-Instruct \
+  --max-samples 32 >"$logs/stage1-held-out.log" 2>&1
