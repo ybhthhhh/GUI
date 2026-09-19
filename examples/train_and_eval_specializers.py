@@ -164,7 +164,7 @@ def main() -> None:
             {"train_positive_n": sum(terminal_rewards[row.sample_id] > 0.0 for row in train_rows), "test_positive_n": sum(terminal_rewards[row.sample_id] > 0.0 for row in test_rows), "train_mean": sum(terminal_rewards[row.sample_id] for row in train_rows) / len(train_rows), "test_mean": sum(terminal_rewards[row.sample_id] for row in test_rows) / len(test_rows)}
             if terminal_rewards is not None else None
         ),
-        "limitation": "Terminal results belong to logged trajectories, not counterfactual selector rollouts. The evaluation matrix remains held-out action likelihood; online task-success validation requires an executable OSWorld environment.",
+        "limitation": "Terminal results belong to logged trajectories, not counterfactual selector rollouts. The evaluation matrix remains held-out action likelihood; online task-success validation requires an executable target GUI environment.",
     }
     (args.output_dir / "formal_3x3.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
