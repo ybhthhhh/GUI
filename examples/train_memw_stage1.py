@@ -20,7 +20,11 @@ def load_records(path: Path, split: str) -> list[dict]:
     if not selected:
         raise ValueError(f"no {split} records in {path}")
     for row in selected:
-        if not row.get("history") or not Path(row["current_image"]).is_file():
+        if (
+            not row.get("history")
+            or not Path(row["current_image"]).is_file()
+            or not all(Path(item.get("image", "")).is_file() for item in row["history"])
+        ):
             raise ValueError(f"invalid current image/history for {row.get('sample_id')}")
     return selected
 
@@ -46,6 +50,8 @@ def main() -> None:
     parser.add_argument("--kl-weight", type=float, default=0.1)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--checkpoint-every", type=int, default=100)
+    parser.add_argument("--resume", type=Path, help="checkpoint written by an earlier run")
+    parser.add_argument("--max-errors", type=int, default=25)
     parser.add_argument("--seed", type=int, default=20260919)
     args = parser.parse_args()
     if args.max_steps <= 0 or args.checkpoint_every <= 0:
@@ -74,12 +80,30 @@ def main() -> None:
         "frozen_backbone": True,
         "stage_two": "requires_online_execution_rewards",
     }
+    start_step = 0
+    if args.resume:
+        state = trainer.torch.load(args.resume, map_location=trainer.device)
+        trainer.compressor.load_state_dict(state["compressor"])
+        trainer.optimizer.load_state_dict(state["optimizer"])
+        start_step = int(state["step"])
+        print("MEMW_STAGE1_RESUMED", f"step={start_step}", f"checkpoint={args.resume}", flush=True)
+    errors = 0
     with metrics_path.open("a", encoding="utf-8") as metrics:
-        for step in range(1, args.max_steps + 1):
+        for step in range(start_step + 1, args.max_steps + 1):
             record = records[(step - 1) % len(records)]
             history = [image_message(item["image"], f"Earlier webpage state. The action taken was: {item['action']}") for item in record["history"]]
             current = [image_message(record["current_image"], f"Task: {record['task']}\nChoose the next webpage action.")]
-            result = trainer.train_step(history_messages=history, current_messages=current, action=record["action"])
+            try:
+                result = trainer.train_step(history_messages=history, current_messages=current, action=record["action"])
+            except (OSError, RuntimeError, ValueError) as error:
+                errors += 1
+                payload = {"step": step, "sample_id": record["sample_id"], "error": str(error)}
+                metrics.write(json.dumps(payload) + "\n")
+                metrics.flush()
+                print("MEMW_STAGE1_SAMPLE_ERROR", json.dumps(payload), flush=True)
+                if errors > args.max_errors:
+                    raise RuntimeError(f"aborting after {errors} invalid samples") from error
+                continue
             payload = {
                 "step": step,
                 "sample_id": record["sample_id"],
