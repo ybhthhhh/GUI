@@ -44,14 +44,22 @@ def main() -> None:
     parser.add_argument(
         "--chunk-bytes",
         type=int,
-        default=64 * 1024 * 1024,
-        help="maximum HTTP Range response size (default: 64 MiB)",
+        default=32 * 1024 * 1024,
+        help="maximum HTTP Range response size (default: 32 MiB)",
+    )
+    parser.add_argument(
+        "--max-retry-wait-seconds",
+        type=float,
+        default=5.0,
+        help="upper bound on transient connection retry wait (default: 5)",
     )
     args = parser.parse_args()
     if args.expected_bytes <= 0:
         raise ValueError("--expected-bytes must be positive")
     if args.chunk_bytes <= 0:
         raise ValueError("--chunk-bytes must be positive")
+    if args.max_retry_wait_seconds < 0:
+        raise ValueError("--max-retry-wait-seconds must be non-negative")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     partial = args.output.with_suffix(args.output.suffix + ".part")
@@ -92,7 +100,7 @@ def main() -> None:
             if retries > 100:
                 raise RuntimeError("download exceeded 100 reconnect attempts") from error
             print(f"download_retry={retries} offset={offset} error={error}", flush=True)
-            time.sleep(min(60, 2 ** min(retries, 5)))
+            time.sleep(min(args.max_retry_wait_seconds, 2 ** min(retries, 5)))
     written = partial.stat().st_size
     if written != args.expected_bytes:
         raise RuntimeError(f"incomplete download: got {written}, expected {args.expected_bytes}")
