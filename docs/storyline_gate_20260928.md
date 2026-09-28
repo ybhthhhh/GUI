@@ -75,11 +75,47 @@ their exploratory producer-by-consumer matrix is stored in
 `validation/storyline-gate-20260928/selectors/producer_consumer_3x3.json`.
 Its matched-versus-transferred episode-bootstrap intervals cross zero for all
 three consumers. Because prior replies include free-form reasoning, this is
-not the strict gate. The structured LLaVA-NeXT scorer has completed 3,498/3,498
-with zero errors, and the structured Qwen2.5-VL and InternVL2 scorers have
-started on the same 3,498-row manifest. The structured 3×3 remains pending.
+not the strict gate. All three structured scorers completed 3,498/3,498 with
+zero errors and 8/8 completion markers each. Each cache passed the same-manifest
+SHA, coverage, candidate-order, and finite-loss checks before selector training.
 The two manifests must never be mixed in a cache or matrix.
 LLaVA-NeXT runs on port 30349, Qwen2.5-VL on 30522, InternVL2 on 30780; each
 has eight independent one-GPU worker processes. The new ports were reserved
 from `/share/platform/available_port.txt` with an audit in
 `validation/storyline-gate-20260928/reserved_ports.json`.
+
+## Structured-action gate result
+
+The three independent selectors fit 2,846 training decisions and used 300
+other training decisions for episode-separated calibration. The 352 validation
+decisions from 110 held-out episodes were used only for evaluation.
+
+Held-out gold-action cross-entropy per native action token (lower is better).
+Rows are the selector/memory producer; columns are frozen consumers. Compare
+numbers **within a column**, never absolute losses across different models.
+
+| Producer | Qwen2.5-VL | LLaVA-NeXT | InternVL2 |
+|---|---:|---:|---:|
+| E_Qwen | **2.1507** | 2.8772 | 2.2576 |
+| E_LLaVA | 2.1606 | 2.8765 | 2.2497 |
+| E_InternVL | 2.1562 | **2.8684** | **2.2431** |
+| Recent-one baseline | 2.1672 | 2.9143 | 2.3196 |
+
+The mean matched-selector advantage over the mean of the two transferred
+selectors (positive favors specialization) was Qwen +0.0077, LLaVA -0.0037,
+InternVL +0.0106 CE. Episode-bootstrap 95% intervals were respectively
+[-0.0083, +0.0231], [-0.0172, +0.0081], and [-0.0073, +0.0304]; **all cross
+zero**. Both Qwen and InternVL match their own selector in the point estimate,
+but LLaVA does not. This gate therefore does not establish systematic diagonal
+specialization. The selectors do improve over recent-one within each consumer,
+so the negative specialization result is not the same as saying memory choice
+has no effect.
+
+Full machine-readable result:
+`validation/storyline-gate-structured-20260928/structured-selectors/producer_consumer_3x3.json`.
+This is an offline action-likelihood result with at most three history events,
+a one-event output budget, and a compact RGB/action-statistic selector. It does
+not measure online task success, failure recovery, or a richer multimodal
+history encoder. Do not advance to latent or model-conditioned memory on the
+basis of this gate; a stronger canonical history-encoder replication and
+wording/field controls would be needed before ruling the hypothesis in or out.

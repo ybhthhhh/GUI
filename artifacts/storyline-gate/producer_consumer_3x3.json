@@ -1,0 +1,203 @@
+{
+  "kind": "storyline_canonical_producer_by_consumer_3x3_offline_gate",
+  "metric": "held-out gold-action CE per model token (lower is better); compare within each consumer column",
+  "train_n": 3146,
+  "heldout_n": 352,
+  "manifest_sha256": "bb5dcf2b1ce68bc0c28ff8cd9792210e6da1b225bff6de784144a607749a11bb",
+  "interface": "same canonical 224px pre-state/action/post-state transition, one-event memory budget, same current observation",
+  "matrix": {
+    "qwen25vl": {
+      "qwen25vl": 2.150694107316097,
+      "llava_next": 2.877204123758234,
+      "internvl2": 2.2576172918805053
+    },
+    "llava_next": {
+      "qwen25vl": 2.1606066171589973,
+      "llava_next": 2.876475188717329,
+      "internvl2": 2.2497412983009415
+    },
+    "internvl2": {
+      "qwen25vl": 2.1561640585776884,
+      "llava_next": 2.868400237289406,
+      "internvl2": 2.2430519226028416
+    }
+  },
+  "subgroup_matrices": {
+    "shopping": {
+      "n": 164,
+      "matrix": {
+        "qwen25vl": {
+          "qwen25vl": 2.1874445669692237,
+          "llava_next": 2.9689039300258098,
+          "internvl2": 2.3401672460098397
+        },
+        "llava_next": {
+          "qwen25vl": 2.1832594010867616,
+          "llava_next": 2.9542466145294943,
+          "internvl2": 2.3144248118297357
+        },
+        "internvl2": {
+          "qwen25vl": 2.172887064632886,
+          "llava_next": 2.9366701805991053,
+          "internvl2": 2.2920114867346704
+        }
+      }
+    },
+    "services": {
+      "n": 188,
+      "matrix": {
+        "qwen25vl": {
+          "qwen25vl": 2.1186351957037934,
+          "llava_next": 2.797210675737584,
+          "internvl2": 2.1856056297676822
+        },
+        "llava_next": {
+          "qwen25vl": 2.140845677987967,
+          "llava_next": 2.8086320300301213,
+          "internvl2": 2.1933152545843346
+        },
+        "internvl2": {
+          "qwen25vl": 2.141575904359323,
+          "llava_next": 2.808845605891583,
+          "internvl2": 2.200342515594226
+        }
+      }
+    },
+    "two_event_history": {
+      "n": 109,
+      "matrix": {
+        "qwen25vl": {
+          "qwen25vl": 2.1062017117010803,
+          "llava_next": 2.978674563944913,
+          "internvl2": 2.2784720071335576
+        },
+        "llava_next": {
+          "qwen25vl": 2.1099985903148375,
+          "llava_next": 2.969496681254199,
+          "internvl2": 2.2422487697147058
+        },
+        "internvl2": {
+          "qwen25vl": 2.106779613033083,
+          "llava_next": 2.960406189911084,
+          "internvl2": 2.232484500725754
+        }
+      }
+    },
+    "three_event_history": {
+      "n": 243,
+      "matrix": {
+        "qwen25vl": {
+          "qwen25vl": 2.1706516016454653,
+          "llava_next": 2.831688576514004,
+          "internvl2": 2.2482627076723456
+        },
+        "llava_next": {
+          "qwen25vl": 2.1833073370191336,
+          "llava_next": 2.8347494986493507,
+          "internvl2": 2.253102144456907
+        },
+        "internvl2": {
+          "qwen25vl": 2.178315929212922,
+          "llava_next": 2.827130077471452,
+          "internvl2": 2.2477920418810418
+        }
+      }
+    }
+  },
+  "matched_advantage_over_transferred": {
+    "qwen25vl": 0.0076912305522460755,
+    "llava_next": -0.0036730081935090197,
+    "internvl2": 0.010627372487881814
+  },
+  "episode_bootstrap_matched_advantage": {
+    "qwen25vl": {
+      "episode_count": 110,
+      "mean_advantage": 0.007691230552245792,
+      "ci95": [
+        -0.008278549525877633,
+        0.023074378818003626
+      ],
+      "bootstrap_fraction_nonpositive": 0.174
+    },
+    "llava_next": {
+      "episode_count": 110,
+      "mean_advantage": -0.003673008193509192,
+      "ci95": [
+        -0.017210053876866825,
+        0.008053954940695997
+      ],
+      "bootstrap_fraction_nonpositive": 0.733
+    },
+    "internvl2": {
+      "episode_count": 110,
+      "mean_advantage": 0.010627372487881852,
+      "ci95": [
+        -0.007344746233424519,
+        0.030427378762324864
+      ],
+      "bootstrap_fraction_nonpositive": 0.119
+    }
+  },
+  "baselines": {
+    "recent_one": {
+      "qwen25vl": 2.167244199441424,
+      "llava_next": 2.914291800317616,
+      "internvl2": 2.3195936701704114
+    },
+    "oldest_one": {
+      "qwen25vl": 2.2191343757065245,
+      "llava_next": 2.926798681728108,
+      "internvl2": 2.3258286629738247
+    },
+    "largest_observed_change": {
+      "qwen25vl": 2.224770293049865,
+      "llava_next": 2.9666704132038038,
+      "internvl2": 2.3793499963162854
+    }
+  },
+  "selection_counts": {
+    "qwen25vl": {
+      "1": 128,
+      "2": 191,
+      "0": 33
+    },
+    "llava_next": {
+      "0": 53,
+      "2": 175,
+      "1": 124
+    },
+    "internvl2": {
+      "0": 70,
+      "2": 157,
+      "1": 125
+    }
+  },
+  "training": {
+    "qwen25vl": {
+      "backend": "qwen25vl",
+      "fit_rows": 2846,
+      "calibration_rows": 300,
+      "best_epoch": 30,
+      "calibration_action_ce": 2.1647543907165527
+    },
+    "llava_next": {
+      "backend": "llava_next",
+      "fit_rows": 2846,
+      "calibration_rows": 300,
+      "best_epoch": 17,
+      "calibration_action_ce": 2.953173875808716
+    },
+    "internvl2": {
+      "backend": "internvl2",
+      "fit_rows": 2846,
+      "calibration_rows": 300,
+      "best_epoch": 16,
+      "calibration_action_ce": 2.279416799545288
+    }
+  },
+  "limitations": [
+    "Logged CoMEM success trajectories have no counterfactual executed outcomes.",
+    "This is an offline action-likelihood gate, not GUI task success.",
+    "Model-native tokenizers and vision towers differ even with identical canonical input images."
+  ]
+}
