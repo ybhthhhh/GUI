@@ -1,0 +1,24 @@
+{
+  "kind": "memw_stage1_compressor_baseline",
+  "backend": "qwen25vl",
+  "checkpoint_step": 1151,
+  "parameter_count": 19951616,
+  "tensor_count": 17,
+  "source_checkpoint_sha256": "bea20011c5e11fd513e53dc9447575948432368fac7d9957ceed099215212e50",
+  "export_sha256": "9c4dc0c1079e33694b924e72006e22181557a0f9270b01bf4793d34740b654c2",
+  "export_bytes": 79808088,
+  "format": "safetensors; compressor tensors only; no optimizer, backbone, dataset or secrets",
+  "training_config": {
+    "kind": "memw_style_stage_one",
+    "manifest": "/home/work/gui-memory-specialization/data/stage1/comem_shopping_service.jsonl",
+    "model_path": "/home/work/Qwen2.5-VL-7B-Instruct",
+    "memory_tokens": 8,
+    "kl_weight": 0.1,
+    "learning_rate": 0.0001,
+    "max_image_pixels": 131072,
+    "frozen_backbone": true,
+    "stage_two": "requires_online_execution_rewards",
+    "world_size": 4
+  },
+  "interpretation": "Model-specific Mem-W-style baseline; not a cross-transfer-compatible storyline encoder."
+}

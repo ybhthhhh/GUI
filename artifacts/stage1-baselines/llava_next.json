@@ -1,0 +1,31 @@
+{
+  "kind": "memw_stage1_compressor_baseline",
+  "backend": "llava_next",
+  "checkpoint_step": 1149,
+  "parameter_count": 21001216,
+  "tensor_count": 17,
+  "source_checkpoint_sha256": "fd111e82fd24ba033da96b4e6d91648f1d1f9aef6f69e41517fef8bac80e7c06",
+  "export_sha256": "6b3603ae6ec1d668bff7d44622838cddba41351767cc9d3f115dfe59414011d5",
+  "export_bytes": 84006488,
+  "format": "safetensors; compressor tensors only; no optimizer, backbone, dataset or secrets",
+  "training_config": {
+    "kind": "memw_style_stage_one",
+    "manifest": "/home/work/gui-memory-specialization/data/stage1/comem_shopping_service.jsonl",
+    "model_path": "/home/work/models/llama3-llava-next-8b-hf",
+    "backend": "llava_next",
+    "memory_tokens": 8,
+    "kl_weight": 0.1,
+    "learning_rate": 0.0001,
+    "max_image_pixels": 50176,
+    "max_action_chars": 2200,
+    "max_history_action_chars": 512,
+    "max_history_items": 1,
+    "eligible_train_records": 4561,
+    "excluded_train_records": 40,
+    "frozen_backbone": true,
+    "stage_two": "requires_online_execution_rewards",
+    "world_size": 8,
+    "memory_efficient": true
+  },
+  "interpretation": "Model-specific Mem-W-style baseline; not a cross-transfer-compatible storyline encoder."
+}
